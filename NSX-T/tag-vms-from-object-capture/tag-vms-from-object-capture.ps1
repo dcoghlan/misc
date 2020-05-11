@@ -311,7 +311,7 @@ $masterTagAssignmentsByVm = Import-CliXml -Path $TagAssignmentByVmFile
 # Retrieve the list of VMs in the inventory
 Write-Host "`n  --> Retrieving inventory virtual machines from NSX Manager"
 try {
-    $inventoryVms = Get-NsxtPolicyInventoryVm -Verbose 4>test.txt
+    $inventoryVms = Get-NsxtPolicyInventoryVm
 }
 Catch {
     Write-Log -Level Error -Msg "Failed to retrieve inventory virtual machines from NSX Manager."
