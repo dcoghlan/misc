@@ -2,7 +2,7 @@
 
 This script has been written with the purpose of being used as part of a suite of tools to help in the migration process from a NSX-v to NSX-T environment.
 
-The script will process some pre-created desired state policy json files which contain `virtualmachine/external_id` expressions, and add them to the relevant groups in NSX-T once the external_id of the VM is found in the NSX-T inventory.
+The script will process some pre-created desired state (Hierarchical API) policy json files which contain `virtualmachine/external_id` expressions, and add them to the relevant groups in NSX-T once the external_id of the VM is found in the NSX-T inventory.
 
 The script requires the following inputs:
 
@@ -10,6 +10,29 @@ The script requires the following inputs:
 - NSX-T Manager API Username
 - NSX-T Manager API Password
 - Path to the directory containing the pre-created desired state json files.
+
+## Sample JSON File
+
+``` json
+{
+  "resource_type": "Group",
+  "display_name": "All Legacy Machines",
+  "marked_for_delete": false,
+  "expression": [
+    {
+      "member_type": "VirtualMachine",
+      "resource_type": "ExternalIDExpression",
+      "external_ids": [
+        "5018eb82-2d36-d637-59d4-5a7bd01c76bd",
+        "5023db4b-f567-4e6b-42e1-de7c781e20fe",
+        "5018be9b-781d-e7ad-1fbc-4e8a630b29ed"
+      ],
+      "marked_for_delete": false
+    }
+  ],
+  "id": "securitygroup-71"
+}
+```
 
 ## Example
 
