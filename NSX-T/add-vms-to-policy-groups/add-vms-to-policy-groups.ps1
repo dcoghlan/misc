@@ -344,13 +344,15 @@ $script:headers = @{
 # Retrieve the list of VMs in the inventory. We use this to see if the 
 # VM/external_id is visible to NSX Manager so the external_id can be added to 
 # the policy group.
-Write-Host "`n  --> Retrieving inventory virtual machines from NSX Manager"
+Write-Host -nonewline "`n  --> Retrieving inventory virtual machines from NSX Manager..."
 try {
     $inventoryVms = Get-NsxtPolicyInventoryVm
+	Write-Host -Foregroundcolor Green "OK"
 }
 Catch {
     Write-Log -Level Error -Msg "Failed to retrieve inventory virtual machines from NSX Manager."
     Write-Log -Level Error -Msg $_
+	Write-Host -foregroundcolor Red "FAILED"
     Write-Host -foregroundcolor Red "  --> Error written to LogFile: $Script:LogFileName`n"
     throw $_
 }
