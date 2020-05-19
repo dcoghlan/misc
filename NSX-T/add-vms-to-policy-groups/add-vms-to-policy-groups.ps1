@@ -15,7 +15,10 @@ param (
     [parameter(Mandatory = $True)]
     # Password used to authenticate to NSX API
     [ValidateScript ( { if ( -not (test-path $_) ) { throw "Path containing the JSON files $_ does not exist." } else { $true } })]
-    [string] $JsonDirectory
+    [string] $JsonDirectory,
+    [parameter(Mandatory = $False)]
+    [ValidateSet("Basic", "Remote")]
+    [string]$AuthType = "Basic"
 )
 
 # ------------------------------------------------------------------------------
@@ -332,8 +335,9 @@ $completionColor = "Green"
 
 # Create the custom header for authentication
 $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $Username, $Password)))
+$script:AuthorizationType = (Get-Culture).TextInfo.ToTitleCase($AuthType.ToLower())
 $script:headers = @{
-    "Authorization" = ("Basic {0}" -f $base64AuthInfo);
+    "Authorization" = ("{0} {1}" -f $script:AuthorizationType, $base64AuthInfo);
     "Content-Type"  = "application/json"
 }
 
