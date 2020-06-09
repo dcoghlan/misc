@@ -49,15 +49,11 @@ if ($PSBoundParameters.ContainsKey('Environment')) {
 
 # Initialise some variables
 $ruleIdsList = New-Object System.Collections.ArrayList
-$data = New-Object System.Collections.ArrayList
-$outputFile = "$Prefix-details.csv"
 $outputFileLog = "$Prefix-log.txt"
-$ruleCounterTable = [ordered]@{}
 
 Write-Host "`n$("-"*80)"
 Write-Host "`n  Script Mode: $($PSCmdlet.ParameterSetName)"
 Write-Host "  Logging File: $outputFileLog"
-Write-Host "  Rule Details: $outputFile`n"
 Write-Host "$("-"*80)`n"
 
 # Make sure we connect to the NSX Manager provided
@@ -74,7 +70,7 @@ else {
 }
 
 # Create the output files if they don't already exist
-foreach ($file in $outputFile,$outputFileLog) {
+foreach ($file in $outputFileLog) {
     if ( -not ( test-path $file )) {
         write-verbose "$file not found... creating a new one"
         New-Item -Type file $file | out-null
@@ -248,8 +244,9 @@ foreach ($cluster in ($dfwClusters | Where-Object { ($_.'Firewall Status' -eq "E
             }
             Write-Log -Level Debug -Msg "FiltersToCheck: $($filtersToCheck | Out-String) "
             Write-Log -Level Debug -Msg "Found VM Nic on host $dfwHost"
-            $ruleCount = 0
             foreach ($filterNameToCheck in $filtersToCheck) {
+                $ruleCount = 0
+                $ruleCounterTable = [ordered]@{}
                 $queryDfwFilterRules = "show dfw host $($dfwHost.'Host Id') filter $filterNameToCheck rules"
                 Write-Log -Level Debug -Msg "Executing: $queryDfwFilterRules"
                 $filterRulesOutput = Invoke-Nsxcli -query $queryDfwFilterRules -RawOutput -WarningAction SilentlyContinue
@@ -268,18 +265,16 @@ foreach ($cluster in ($dfwClusters | Where-Object { ($_.'Firewall Status' -eq "E
                         }
                     }
                 }
+                $ruleCounterTable.Add("Total", $ruleCount)
+                Add-Content -path "$Prefix-$filterNameToCheck.csv" -Value ("RuleId,RuleCount")
+
+                # Add the data from the hashtable into the CSV file
+                foreach ($key in $ruleCounterTable.keys) {
+                    Add-Content -path "$Prefix-$filterNameToCheck.csv" -value ("$key, $($ruleCounterTable.item($key))")
+                }
             }
-            $ruleCounterTable.Add("Total", $ruleCount)
         }
     }
-}
-
-# Add header row to csv output file
-Add-Content -path $outputFile -value ("RuleId,RuleCount")
-
-# Add the data from the hashtable into the CSV file
-foreach ($key in $ruleCounterTable.keys) {
-    Add-Content -path $outputFile -value ("$key, $($ruleCounterTable.item($key))")
 }
 
 $ElapsedTime = $((get-date) - $StartTime)
