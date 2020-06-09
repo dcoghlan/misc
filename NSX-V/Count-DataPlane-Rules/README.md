@@ -8,7 +8,7 @@ The script operates in 3 main modes. Each mode is required to have a VM name sup
 
 ### All Rules
 
-```
+```Log
 PS C:\Users\Administrator> .\count-dataplane-rules.ps1 -Username admin -Password VMware1!VMware1! -Server 192.168.110.190  -VmName Dummy-011
 
 --------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ Execution completed in 0:0:8
 
 ### Section
 
-```
+```Log
 PS C:\Users\Administrator> .\count-dataplane-rules.ps1 -Username admin -Password VMware1!VMware1! -Server 192.168.110.190  -VmName Dummy-011 -SectionName Moe
 
 --------------------------------------------------------------------------------
@@ -64,7 +64,7 @@ Execution completed in 0:0:8
 
 ### Rule ID
 
-```
+```Log
 PS C:\Users\Administrator> .\count-dataplane-rules.ps1 -Username admin -Password VMware1!VMware1! -Server 192.168.110.190  -VmName Dummy-011 -ruleid 1005
 
 --------------------------------------------------------------------------------
@@ -92,10 +92,12 @@ Execution completed in 0:0:7
 ## Output Files
 
 All modes of the script produce the same outputs.
- - Detailed log file
- - CSV File (Example below)
 
- ```
+- A copy of the filter that was found and processed for the VM
+- Detailed log file
+- CSV File (Example below)
+
+ ```log
 RuleId,RuleCount
 1008, 16
 1007, 26
