@@ -253,6 +253,7 @@ foreach ($cluster in ($dfwClusters | Where-Object { ($_.'Firewall Status' -eq "E
                 $queryDfwFilterRules = "show dfw host $($dfwHost.'Host Id') filter $filterNameToCheck rules"
                 Write-Log -Level Debug -Msg "Executing: $queryDfwFilterRules"
                 $filterRulesOutput = Invoke-Nsxcli -query $queryDfwFilterRules -RawOutput -WarningAction SilentlyContinue
+                Add-Content -path "$Prefix-$filterNameToCheck.txt" -Value $filterRulesOutput
                 foreach ($filterLine in ($filterRulesOutput -split "`n") ) {
                     Write-Log -Level Debug -Msg "processing: $filterline"
                     if ($filterLine -match '(?<=.*\s+rule\s+)(\d+)(?=\s+at\s+.*;)') {
