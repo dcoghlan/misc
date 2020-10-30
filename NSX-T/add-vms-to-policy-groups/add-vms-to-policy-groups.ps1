@@ -63,7 +63,7 @@ function _init {
 "@
     
         if ( -not ("TrustAllCertsPolicy" -as [type])) {
-            add-type $TrustAllCertsPolicy
+            Add-Type $TrustAllCertsPolicy
         }
     
         $script:originalCertPolicy = [System.Net.ServicePointManager]::CertificatePolicy
@@ -72,7 +72,7 @@ function _init {
 
 function Invoke-NsxtRestMethod {
 
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidDefaultValueSwitchParameter","")]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidDefaultValueSwitchParameter", "")]
 
     param (
         [parameter(Mandatory = $True)]
@@ -137,18 +137,18 @@ function Start-Log {
         [switch]$overwrite = $False
     )
     # Create the output files if they don't already exist
-    if ( -not ( test-path $file )) {
-        write-verbose "$file not found... creating a new one"
-        New-Item -Type file $file | out-null
-        if ( test-path $file ) {
-            write-verbose "file $file created"
+    if ( -not ( Test-Path $file )) {
+        Write-Verbose "$file not found... creating a new one"
+        New-Item -Type file $file | Out-Null
+        if ( Test-Path $file ) {
+            Write-Verbose "file $file created"
         }
     }
     # If the file already exists, then if the OverwriteLogFile is specified, we
     # remove the existing one and create a new log file
     elseif ($overwrite -eq $True) {
         Get-Item $file | Remove-Item
-        New-Item -Type file $file | out-null
+        New-Item -Type file $file | Out-Null
         Write-Log -Level Debug -Msg "New Logfile created as OverwriteLogFile was enabled."
     }  
 }
@@ -171,38 +171,44 @@ function Write-Log {
     )
 
     $ForegroundColor = "white"
-    $msgPrefix = "$(get-date -f "HH:mm:ss") : $((get-pscallstack)[1].Location), $((get-pscallstack)[1].Command):"
+    $msgPrefix = "$(Get-Date -f "HH:mm:ss") : $((Get-PSCallStack)[1].Location), $((Get-PSCallStack)[1].Command):"
 
     switch ($level) {
         "error" {
-            Add-content -path $Script:logFilename -value "$msgPrefix ERROR: $msg"
+            Add-Content -Path $Script:logFilename -Value "$msgPrefix ERROR: $msg"
+            break
         }
         "debug" {
-            write-debug "$msgPrefix $msg"
-            Add-content -path $Script:logFilename -value "$msgPrefix DEBUG: $msg"
+            Write-Debug "$msgPrefix $msg"
+            Add-Content -Path $Script:logFilename -Value "$msgPrefix DEBUG: $msg"
+            break
         }
         "warning" {
-            write-warning "$msgPrefix $msg"
-            Add-content -path $Script:logFilename -value "$msgPrefix WARNING: $msg"
+            Write-Warning "$msgPrefix $msg"
+            Add-Content -Path $Script:logFilename -Value "$msgPrefix WARNING: $msg"
+            break
         }
         "verbose" {
-            write-verbose "$msgPrefix $msg"
-            Add-content -path $Script:logFilename -value "$msgPrefix VERBOSE: $msg"
+            Write-Verbose "$msgPrefix $msg"
+            Add-Content -Path $Script:logFilename -Value "$msgPrefix VERBOSE: $msg"
+            break
         }
         "info" {
             Write-Information "$msgPrefix $msg"
-            Add-content -path $Script:logFilename -value "$msgPrefix INFO: $msg"
+            Add-Content -Path $Script:logFilename -Value "$msgPrefix INFO: $msg"
+            break
         }
         "file" {
-            Add-content -path $Script:logFilename -value "$msgPrefix FILE: $msg"
+            Add-Content -Path $Script:logFilename -Value "$msgPrefix FILE: $msg"
+            break
         }
         "host" {
             Add-Content -Path $Script:logFilename -Value "$msgPrefix HOST: $msg"
             Write-Host $msg
         }
         default {
-            write-host "$msg" -ForegroundColor $ForegroundColor
-            Add-content -path $Script:logFilename -value "$msgPrefix $msg"
+            Write-Host "$msg" -ForegroundColor $ForegroundColor
+            Add-Content -Path $Script:logFilename -Value "$msgPrefix $msg"
         }
     }
 }
@@ -299,10 +305,10 @@ function Get-VmFromInventory {
     )
 
     if ($PSBoundParameters.ContainsKey('DisplayName')) {
-        return ($Inventory | Where-Object {$_.display_name -eq $DisplayName})
+        return ($Inventory | Where-Object { $_.display_name -eq $DisplayName })
     }
     else {
-        return $Inventory | Where-Object {$_.external_id -eq $ExternalId}
+        return $Inventory | Where-Object { $_.external_id -eq $ExternalId }
     }
 }
 
@@ -312,8 +318,8 @@ function New-GroupConjunctionExpression {
     )
     $object = [ordered]@{
         "conjunction_operator" = $operator.ToUpper();
-        "resource_type"     = "ConjunctionOperator";
-        "marked_for_delete" = $false;
+        "resource_type"        = "ConjunctionOperator";
+        "marked_for_delete"    = $false;
     }
 
     $object
@@ -324,10 +330,10 @@ function New-GroupVmExpression {
         [string[]]$Id
     )
     $object = [ordered]@{
-        "member_type" = "VirtualMachine"
+        "member_type"       = "VirtualMachine"
         "resource_type"     = "ExternalIDExpression";
         "marked_for_delete" = $false;
-        "external_ids" = New-Object System.Collections.ArrayList;
+        "external_ids"      = New-Object System.Collections.ArrayList;
     }
 
     foreach ($item in $Id) {
@@ -348,8 +354,8 @@ function Invoke-PatchPolicyObject {
     $uri = New-Object System.UriBuilder("https://$nsxManager/policy/api/v1")
     $uri.path += $path
 
-    write-debug $path
-    write-debug $body
+    Write-Debug $path
+    Write-Debug $body
     Invoke-NsxtRestMethod -method PATCH -body $body -uri $uri -SkipCertificateCheck -Headers $headers
 
 }
@@ -366,7 +372,7 @@ _init
 $ScriptName = Get-Item ($MyInvocation.MyCommand.Name) | Select-Object -ExpandProperty BaseName
 $script:logFileName = "$($ScriptName)_$($StartTime.ToString('yyy-MM-dd-HHmmss')).log"
 Start-Log -File $Script:logFileName
-Write-Log -Level Info -Msg ('-'*80)
+Write-Log -Level Info -Msg ('-' * 80)
 Write-Log -Level Info -Msg "Script start time = $StartTime"
 
 # Log some interesting stuff
@@ -394,34 +400,34 @@ $script:headers = @{
 # Retrieve the list of VMs in the inventory. We use this to see if the 
 # VM/external_id is visible to NSX Manager so the external_id can be added to 
 # the policy group.
-Write-Host -nonewline "`n  --> Retrieving inventory virtual machines from NSX Manager..."
+Write-Host -NoNewline "`n  --> Retrieving inventory virtual machines from NSX Manager..."
 try {
     $inventoryVms = Get-NsxtPolicyInventoryVm
-	Write-Host -Foregroundcolor Green "OK"
+    Write-Host -ForegroundColor Green "OK"
 }
 Catch {
     Write-Log -Level Error -Msg "Failed to retrieve inventory virtual machines from NSX Manager."
     Write-Log -Level Error -Msg $_
-	Write-Host -foregroundcolor Red "FAILED"
-    Write-Host -foregroundcolor Red "  --> Error written to LogFile: $Script:LogFileName`n"
+    Write-Host -ForegroundColor Red "FAILED"
+    Write-Host -ForegroundColor Red "  --> Error written to LogFile: $Script:LogFileName`n"
     throw $_
 }
 
 # Generate a list of group files based on the file identifier from the directory specified.
-$groupJsonFiles = Get-ChildItem -Path $JsonDirectory | Where-Object {$_.name -match $groupFileIdentifier}
+$groupJsonFiles = Get-ChildItem -Path $JsonDirectory | Where-Object { $_.name -match $groupFileIdentifier }
 
 $tempGroupsToDelete = New-Object System.Collections.ArrayList
 
-# Process each NSX-T Policy Group json file. The configuration in the file is 
+# Process each NSX-T Policy Group json file. The configuration in the file is
 # the desired state of the group, however as the VMs didn't exist in the NSX-T
-# inventory when the group was created, if we added them via the API (which 
+# inventory when the group was created, if we added them via the API (which
 # suprisingly allows you do add an external_id that doesn't exist), it results
-# in the group having realization errors, along with every parent/nested group 
+# in the group having realization errors, along with every parent/nested group
 # and any firewall rules which use the group.
 #
 # So we go through and pull out all the virtual_machine external_ids, and then
 # check the list of inventory vms from NSX Manager, and only if the external_id
-# is seen in NSX Manager do we then add the external_id to the policy group. 
+# is seen in NSX Manager do we then add the external_id to the policy group.
 # This allows for a slow/staged migration.
 #
 # If there are any Temporary VM IP Groups created for the migration and added to
@@ -435,11 +441,11 @@ $tempGroupsToDelete = New-Object System.Collections.ArrayList
 
 foreach ($item in $groupJsonFiles) {
     $missingExternalIds = $False
-    Write-Log -Level Info -Msg ('-'*80)
+    Write-Log -Level Info -Msg ('-' * 80)
     Write-Log -Level Verbose -Msg "Loading $groupFileIdentifier file: $($item.name)"
 
-    $json = Get-Content -path $JsonDirectory$pathSeparator$($item.name) | ConvertFrom-Json
-    Write-host -nonewline "  --> Processing: $($json.id) ($($json.display_name))..."
+    $json = Get-Content -Path $JsonDirectory$pathSeparator$($item.name) | ConvertFrom-Json
+    Write-Host -NoNewline "  --> Processing: $($json.id) ($($json.display_name))..."
     Write-Log -Level Verbose -Msg "$($json.id): Processing group: $($json.display_name)"
     Write-Log -Level Verbose -Msg "$($json.id): Total Expressions found = $(($json.expression).count)"
 
@@ -478,7 +484,7 @@ foreach ($item in $groupJsonFiles) {
             $group = Get-NsxtPolicyGroup -GroupId $json.id
         }
         catch {
-            Write-Host -Foregroundcolor Red "FAILED"
+            Write-Host -ForegroundColor Red "FAILED"
             Write-Log -Level Error -Msg "$($json.id): Failed to retrieve group from NSX Manager $policyPath"
             Write-Log -Level Error -Msg $_
             $completionColor = "Red"
@@ -490,7 +496,7 @@ foreach ($item in $groupJsonFiles) {
             $expressionProperty = New-Object System.Collections.ArrayList
             $group | Add-Member -MemberType NoteProperty -Name 'expression' -Value $expressionProperty | Out-Null
         }
-        $externalIdVmExpression = $group.expression | Where-Object {($_.resource_type -eq 'ExternalIDExpression') -AND ($_.member_type -eq 'VirtualMachine')}
+        $externalIdVmExpression = $group.expression | Where-Object { ($_.resource_type -eq 'ExternalIDExpression') -AND ($_.member_type -eq 'VirtualMachine') }
         if ($externalIdVmExpression) {
             Write-Log -Level Verbose -Msg "$($json.id): Found existing VirtualMachine/ExternalIDExpression"
             # Existing expression so we just append to the list
@@ -553,13 +559,13 @@ foreach ($item in $groupJsonFiles) {
         try {
             if ($requiresPatch -eq $True) {
                 Write-Log -Level info -Msg "$($json.id): Patching updated configuration"
-                Invoke-PatchPolicyObject -path $policyPath -Body $($group | ConvertTo-Json -depth 100) | Out-Null
+                Invoke-PatchPolicyObject -path $policyPath -Body $($group | ConvertTo-Json -Depth 100) | Out-Null
                 if ($missingExternalIds -eq $True) {
-                    Write-Host -Foregroundcolor Green -NoNewLine "UPDATED "
-                    Write-Host -Foregroundcolor Yellow "(Some external_ids missing, check log file)"
+                    Write-Host -ForegroundColor Green -NoNewline "UPDATED "
+                    Write-Host -ForegroundColor Yellow "(Some external_ids missing, check log file)"
                 }
                 else {
-                    Write-Host -Foregroundcolor Green "UPDATED"
+                    Write-Host -ForegroundColor Green "UPDATED"
                 }
                 Continue
 
@@ -567,24 +573,25 @@ foreach ($item in $groupJsonFiles) {
             else {
                 Write-Log -Level Verbose -Msg "$($json.id): No updates needing to be patched"
                 if ($missingExternalIds -eq $True) {
-                    Write-Host -Foregroundcolor Green -NoNewLine "OK "
-                    Write-Host -Foregroundcolor Yellow "(Some external_ids missing, check log file)"
+                    Write-Host -ForegroundColor Green -NoNewline "OK "
+                    Write-Host -ForegroundColor Yellow "(Some external_ids missing, check log file)"
                 }
                 else {
-                    Write-Host -Foregroundcolor Green "OK"
+                    Write-Host -ForegroundColor Green "OK"
                 }
                 Continue
             }
         }
         catch {
             Write-Log -Level Error -Msg "$($json.id): Failed to patch object $policyPath"
-            Write-Log -Level Error -Msg "$($json.id): body = $($group | ConvertTo-Json -depth 100 -Compress)"
+            Write-Log -Level Error -Msg "$($json.id): body = $($group | ConvertTo-Json -Depth 100 -Compress)"
             Write-Log -Level Error -Msg $_
-            Write-Host -Foregroundcolor Red "FAILED: Error patching object $policyPath"
+            Write-Host -ForegroundColor Red "FAILED: Error patching object $policyPath"
             $completionColor = "Red"
             Continue
         }
     }
+    Write-Host -ForegroundColor Cyan "SKIPPED"
 }
 
 if ($tempGroupsToDelete.count -ge 1) {
@@ -596,7 +603,8 @@ if ($tempGroupsToDelete.count -ge 1) {
         Remove-NsxtPolicyGroup -Path $groupPath
     }
 }
-$ElapsedTime = $((get-date) - $StartTime)
+
+$ElapsedTime = $((Get-Date) - $StartTime)
 Write-Log -Level Info -Msg "Script duration = $ElapsedTime"
-write-host -foregroundcolor Green "`nExecution completed in $($ElapsedTime.Hours):$($ElapsedTime.Minutes):$($ElapsedTime.Seconds)"
-Write-Host -foregroundcolor $completionColor "LogFile: $Script:LogFileName`n"
+Write-Host -ForegroundColor Green "`nExecution completed in $($ElapsedTime.Hours):$($ElapsedTime.Minutes):$($ElapsedTime.Seconds)"
+Write-Host -ForegroundColor $completionColor "LogFile: $Script:LogFileName`n"
