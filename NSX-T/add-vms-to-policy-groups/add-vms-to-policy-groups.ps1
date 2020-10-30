@@ -78,6 +78,7 @@ function Invoke-NsxtRestMethod {
     )
 
     if ($psversiontable.psedition -eq "Desktop") {
+        Write-Debug "Invoke-NsxtRestMethod: Desktop version"
         #Use splatting to build up the IWR params
         $irmSplat = @{
             "method"  = $method;
@@ -94,9 +95,11 @@ function Invoke-NsxtRestMethod {
             [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
         }
         Write-Debug $uri
-        invoke-RestMethod @irmSplat
+        Write-Debug $($irmSplat | ConvertTo-Json -Depth 100)
+        Invoke-RestMethod @irmSplat
     }
     else {
+        Write-Debug "Invoke-NsxtRestMethod: Core version"
         #Use splatting to build up the IWR params
         $irmSplat = @{
             "method"  = $method;
@@ -112,6 +115,7 @@ function Invoke-NsxtRestMethod {
             $irmSplat.Add("SkipCertificateCheck", $SkipCertificateCheck)
         }
         Write-Debug $uri
+        Write-Debug $($irmSplat | ConvertTo-Json -Depth 100)
         Invoke-RestMethod @irmSplat
     }
 }
