@@ -1,31 +1,42 @@
 
 param (
-    [parameter(Mandatory = $True)]
+    [Parameter (Mandatory = $True, ParameterSetName = "default")]
+    [Parameter (Mandatory = $True, ParameterSetName = "removeTempObjects")]
     # NSX Manager IP or FQDN.
     [ValidateNotNullOrEmpty()]
     [string] $NsxManager,
-    [parameter(Mandatory = $True)]
+    [Parameter (Mandatory = $True, ParameterSetName = "default")]
+    [Parameter (Mandatory = $True, ParameterSetName = "removeTempObjects")]
     # Username used to authenticate to NSX API
     [ValidateNotNullOrEmpty()]
     [string] $Username,
-    [parameter(Mandatory = $True)]
+    [Parameter (Mandatory = $True, ParameterSetName = "default")]
+    [Parameter (Mandatory = $True, ParameterSetName = "removeTempObjects")]
     # Password used to authenticate to NSX API
     [ValidateNotNullOrEmpty()]
     [string] $Password,
-    [parameter(Mandatory = $True)]
+    [Parameter (Mandatory = $True, ParameterSetName = "default")]
+    [Parameter (Mandatory = $True, ParameterSetName = "removeTempObjects")]
     # Password used to authenticate to NSX API
-    [ValidateScript ( { if ( -not (test-path $_) ) { throw "Path containing the JSON files $_ does not exist." } else { $true } })]
+    [ValidateScript ( { if ( -not (Test-Path $_) ) { throw "Path containing the JSON files $_ does not exist." } else { $true } })]
     [string] $JsonDirectory,
-    [parameter(Mandatory = $False)]
+    [Parameter (Mandatory = $True, ParameterSetName = "default")]
+    [Parameter (Mandatory = $True, ParameterSetName = "removeTempObjects")]
+    [ValidateNotNullOrEmpty()]
+    [string]$groupFileIdentifier,
+    [Parameter (Mandatory = $False, ParameterSetName = "default")]
+    [Parameter (Mandatory = $False, ParameterSetName = "removeTempObjects")]
     [ValidateSet("Basic", "Remote")]
-    [string]$AuthType = "Basic"
+    [string]$AuthType = "Basic",
+    [Parameter (Mandatory = $True, ParameterSetName = "removeTempObjects")]
+    [ValidateNotNullOrEmpty()]
+    [string]$TempVmPrefix
 )
 
 # ------------------------------------------------------------------------------
 # No need to modify anything below this line.
 # ------------------------------------------------------------------------------
 #Requires -Version 5.1
-$groupFileIdentifier = "_group_"
 $pathSeparator = [IO.Path]::DirectorySeparatorChar # This is to determine dynamic path separators
 # ------------------------------------------------------------------------------
 # Functions
@@ -245,6 +256,37 @@ function Get-NsxtPolicyGroup {
     }
 }
 
+function Remove-NsxtPolicyGroup {
+    param (
+        [Parameter(Mandatory = $False)]
+        [String] $DomainId = "default",
+        [Parameter(Mandatory = $False)]
+        [String] $GroupId,
+        [Parameter(Mandatory = $False)]
+        [String] $Path
+    )
+
+    $uri = New-Object System.UriBuilder("https://$nsxManager")
+
+    if ($PSBoundParameters.ContainsKey('Path')) {
+        $uri.path = "/policy/api/v1$Path"
+    }
+    else {
+        $uri.path = "/policy/api/v1/infra/domains/$DomainId/groups"
+    }
+
+    if ($PSBoundParameters.ContainsKey('GroupId')) {
+        $uri.path = $uri.path + "/$groupId"
+    }
+
+    try {
+        $response = Invoke-NsxtRestMethod -Method Delete -URI $uri -Headers $script:headers -SkipCertificateCheck
+    }
+    catch {
+        throw ($_)
+    }
+
+}
 function Get-VmFromInventory {
     param (
         [string]$DisplayName,
@@ -364,6 +406,8 @@ Catch {
 # Generate a list of group files based on the file identifier from the directory specified.
 $groupJsonFiles = Get-ChildItem -Path $JsonDirectory | Where-Object {$_.name -match $groupFileIdentifier}
 
+$tempGroupsToDelete = New-Object System.Collections.ArrayList
+
 # Process each NSX-T Policy Group json file. The configuration in the file is 
 # the desired state of the group, however as the VMs didn't exist in the NSX-T
 # inventory when the group was created, if we added them via the API (which 
@@ -375,6 +419,15 @@ $groupJsonFiles = Get-ChildItem -Path $JsonDirectory | Where-Object {$_.name -ma
 # check the list of inventory vms from NSX Manager, and only if the external_id
 # is seen in NSX Manager do we then add the external_id to the policy group. 
 # This allows for a slow/staged migration.
+#
+# If there are any Temporary VM IP Groups created for the migration and added to
+# the paths, then when update the group with the external_ids of the visible
+# virtual machines, we also remove the corresponding temporary ip vm group. The
+# path or the temporary group object will be defined by the tempVmprefix
+# parameter and the VM Name.
+#
+# The script will then also go through and remove all the temporary vm ip groups
+# for the virtual machines that are now visible in the inventory. 
 
 foreach ($item in $groupJsonFiles) {
     $missingExternalIds = $False
@@ -389,6 +442,7 @@ foreach ($item in $groupJsonFiles) {
     foreach ($expression in $json.expression) {
         if ($expression.member_type -eq 'VirtualMachine') {
             $externalIdsToAdd = New-Object System.Collections.ArrayList
+            $tempGroupPathsToRemove = New-Object System.Collections.ArrayList
             foreach ($external_id in ($expression.external_ids -split ' ')) {
                 Write-Log -Level Verbose -Msg "$($json.id): Processing external_id found in $groupFileIdentifier file: $external_id"
                 $vm = Get-VmFromInventory -Inventory $inventoryVms -ExternalId $external_id
@@ -400,6 +454,11 @@ foreach ($item in $groupJsonFiles) {
                 else {
                     Write-Log -Level Verbose -Msg "$($json.id): Found matching external_id in NSX-T Inventory: $external_id ($($vm.display_name))"
                     $externalIdsToAdd.Add($external_id) | Out-Null
+                    if ($TempVmPrefix) {
+                        $tempGroupPathsToRemove.Add("/infra/domains/default/groups/$($TempVmPrefix)$($vm.display_name)") | Out-Null
+                        $tempGroupsToDelete.Add("/infra/domains/default/groups/$($TempVmPrefix)$($vm.display_name)") | Out-Null
+                    }
+
                 }
             }        
         }
@@ -459,6 +518,32 @@ foreach ($item in $groupJsonFiles) {
             $requiresPatch = $True
         }
 
+        $pathExpression = $group.expression | Where-Object { $_.resource_type -eq 'PathExpression' }
+        if ($pathExpression) {
+            # Take a copy of the original paths in the expression. This is
+            # because when the array gets converted from JSON, it is a
+            # collection of fixed size which means we cannot remove anything
+            # from it.
+            $expressionPaths = { $pathExpression.paths }.Invoke()
+
+            Write-Log -Level Verbose -Msg "$($json.id): Found existing pathExpression"
+            if ($tempGroupPathsToRemove.count -ge 1) {
+                Write-Log -Level Verbose -Msg "$($json.id): Found $($tempGroupPathsToRemove.count) path(s) to try and remove from group"
+                foreach ($path in $tempGroupPathsToRemove) {
+                    if ($expressionPaths -ccontains $path) {
+                        Write-Log -Level Verbose -Msg "$($json.id): removing path expression $path"
+                        $expressionPaths.Remove($path)
+                        $requiresPatch = $True
+                    }
+                    else {
+                        Write-Log -Level Verbose -Msg "$($json.id): Path does not exist in pathExpression: $path"
+                    }
+                }
+    
+            }
+            $pathExpression.paths = $expressionPaths
+        }
+
         $policyPath = "/infra/domains/default/groups/$($json.id)"
 
         try {
@@ -496,7 +581,16 @@ foreach ($item in $groupJsonFiles) {
             Continue
         }
     }
-    Write-Host -Foregroundcolor Cyan "SKIPPED"
+}
+
+if ($tempGroupsToDelete.count -ge 1) {
+    Write-Log -Level Info -Msg ('-' * 80)
+    Write-Log -Level Host -Msg "`n  --> Cleaning up temporary vm ip groups"
+    Write-Log -Level verbose -Msg "Identified $($tempGroupsToDelete.count) temporary vm ip group(s) to delete."
+    foreach ($groupPath in $tempGroupsToDelete) {
+        Write-Log -Level verbose -Msg "Attempting to delete group: $groupPath"
+        Remove-NsxtPolicyGroup -Path $groupPath
+    }
 }
 $ElapsedTime = $((get-date) - $StartTime)
 Write-Log -Level Info -Msg "Script duration = $ElapsedTime"
