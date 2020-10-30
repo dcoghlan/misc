@@ -196,6 +196,10 @@ function Write-Log {
         "file" {
             Add-content -path $Script:logFilename -value "$msgPrefix FILE: $msg"
         }
+        "host" {
+            Add-Content -Path $Script:logFilename -Value "$msgPrefix HOST: $msg"
+            Write-Host $msg
+        }
         default {
             write-host "$msg" -ForegroundColor $ForegroundColor
             Add-content -path $Script:logFilename -value "$msgPrefix $msg"
