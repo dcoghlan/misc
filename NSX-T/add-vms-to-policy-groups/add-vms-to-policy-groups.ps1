@@ -448,7 +448,7 @@ foreach ($item in $groupJsonFiles) {
             $externalIdsToAdd = New-Object System.Collections.ArrayList
             $tempGroupPathsToRemove = New-Object System.Collections.ArrayList
             foreach ($external_id in ($expression.external_ids -split ' ')) {
-                Write-Log -Level Verbose -Msg "$($json.id): Processing external_id found in $groupFileIdentifier file: $external_id"
+                Write-Log -Level Verbose -Msg "$($json.id): Processing external_id: $external_id"
                 $vm = Get-VmFromInventory -Inventory $inventoryVms -ExternalId $external_id
                 if (-not ( $vm) ) {
                     Write-Log -Level ERROR -Msg "$($json.id): External_id not found in NSX-T Inventory: $external_id"
