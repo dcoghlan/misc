@@ -6,12 +6,12 @@ The script will process some pre-created desired state (Hierarchical API) policy
 
 The script requires the following inputs:
 
-- NSX-T Manager IP/FQDN (-NsxManager)
-- NSX-T Manager API Username (-Username)
-- NSX-T Manager API Password (-Password)
-- Path to the directory containing the pre-created desired state json files (-JsonDirectory)
-- A string used to identify the pre-created desired state json files (-groupFileIdentifier)
-- A string use to identify any temporary groups created as IP objects for a virtual machine (-TempVmPrefix)
+- NSX-T Manager IP/FQDN (`-NsxManager`)
+- NSX-T Manager API Username (`-Username`)
+- NSX-T Manager API Password (`-Password`)
+- Path to the directory containing the pre-created desired state json files (`-JsonDirectory`)
+- A string used to identify the pre-created desired state json files (`-groupFileIdentifier`)
+- A string use to identify any temporary groups created as IP objects for a virtual machine (`-TempVmPrefix`)
 
 ## Sample JSON File
 
