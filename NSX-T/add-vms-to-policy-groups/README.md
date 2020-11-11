@@ -6,10 +6,12 @@ The script will process some pre-created desired state (Hierarchical API) policy
 
 The script requires the following inputs:
 
-- NSX-T Manager IP/FQDN
-- NSX-T Manager API Username
-- NSX-T Manager API Password
-- Path to the directory containing the pre-created desired state json files.
+- NSX-T Manager IP/FQDN (`-NsxManager`)
+- NSX-T Manager API Username (`-Username`)
+- NSX-T Manager API Password (`-Password`)
+- Path to the directory containing the pre-created desired state json files (`-JsonDirectory`)
+- A string used to identify the pre-created desired state json files (`-groupFileIdentifier`)
+- A string use to identify any temporary groups created as IP objects for a virtual machine (`-TempVmPrefix`)
 
 ## Sample JSON File
 
@@ -37,7 +39,7 @@ The script requires the following inputs:
 ## Example
 
 ``` bash
-PS > ./add-vms-to-policy-groups.ps1 -NsxManager 192.168.172.28 -Username admin -password VMware1!VMware1! -JsonDirectory './jsonFiles/'
+PS > ./add-vms-to-policy-groups.ps1 -NsxManager 192.168.172.28 -Username admin -password VMware1!VMware1! -JsonDirectory './jsonFiles/' -groupFileIdentifier CORP_group_ -TempVmPrefix TEMP_IP_VM_GROUP_
 
 
   --> Retrieving inventory virtual machines from NSX Manager
@@ -55,7 +57,7 @@ The status next to each group being processed is as follows:
 - OK = The specified external_ids already exists in the expression. If at least one is still missing as it wasn't found in the NSX-T inventory, it will display `OK (Some external_ids missing, check log file)`
 - UPDATED = The object has been updated with at least 1 or more valid external_ids. If at least one is still missing as it wasn't found in the NSX-T inventory, it will display `OK (Some external_ids missing, check log file)`
 
-It is safe to run the script multiple times.  If there are no changes to apply then nothing will be changed. It will only add VMs as it finds them. So it should be safe to continually run the script untill it reports all groups with a status of `OK`.
+It is safe to run the script multiple times.  If there are no changes to apply then nothing will be changed. It will only add VMs as it finds them. So it should be safe to continually run the script.
 
 ## LogFile Output
 
