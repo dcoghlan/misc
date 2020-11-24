@@ -551,7 +551,30 @@ foreach ($item in $groupJsonFiles) {
                 }
     
             }
-            $pathExpression.paths = $expressionPaths
+
+            if ($expressionPaths.count -ge 1) {
+                $pathExpression.paths = $expressionPaths
+            }
+            else {
+                Write-Log -Level Verbose -Msg "$($json.id): No pathExpressions remain. Need to remove expression in its entirety."
+                $expressionsClone = { $group.expression }.Invoke()
+                $arrayIndexCounter = 0
+                Foreach ($expression in $group.expression) {
+
+                    if ($expression.resource_type -eq "PathExpression") {
+
+                        if ($expressionsClone[$arrayIndexCounter + 1].resource_type -eq "ConjunctionOperator") {
+                            Write-Log -Level Verbose -Msg "$($json.id): Found ConjunctionOperator after pathExpression needs to be removed. Removing the Conjunction expression."
+                            $expressionsClone.RemoveAt($arrayIndexCounter + 1)
+                        }
+                    
+                        Write-Log -Level VERBOSE -Msg "$($json.id): Removing pathExpression..."
+                        $expressionsClone.RemoveAt($arrayIndexCounter)
+                    }
+                    $arrayIndexCounter += 1
+                }
+                $group.expression = $expressionsClone
+            }
         }
 
         $policyPath = "/infra/domains/default/groups/$($json.id)"
@@ -596,7 +619,7 @@ foreach ($item in $groupJsonFiles) {
 
 if ($tempGroupsToDelete.count -ge 1) {
     Write-Log -Level Info -Msg ('-' * 80)
-    Write-Log -Level Host -Msg "`n  --> Cleaning up temporary vm ip groups"
+    Write-Log -Level Host -Msg "  --> Cleaning up temporary vm ip groups"
     Write-Log -Level verbose -Msg "Identified $($tempGroupsToDelete.count) temporary vm ip group(s) to delete."
     foreach ($groupPath in $tempGroupsToDelete) {
         Write-Log -Level verbose -Msg "Attempting to delete group: $groupPath"
