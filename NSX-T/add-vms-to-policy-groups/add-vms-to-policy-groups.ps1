@@ -542,7 +542,7 @@ foreach ($item in $groupJsonFiles) {
                 foreach ($path in $tempGroupPathsToRemove) {
                     if ($expressionPaths -ccontains $path) {
                         Write-Log -Level Verbose -Msg "$($json.id): removing path expression $path"
-                        $expressionPaths.Remove($path)
+                        $expressionPaths.Remove($path) | Out-Null
                         $requiresPatch = $True
                     }
                     else {
