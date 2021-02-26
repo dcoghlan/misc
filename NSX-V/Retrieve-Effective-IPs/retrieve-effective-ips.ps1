@@ -27,7 +27,7 @@ $Prefix = $StartTime.ToString('yyy-MM-dd-HHMMss')
 if ($PSBoundParameters.ContainsKey('Environment')) {
     $Prefix = "$Environment-$Prefix"
 }
-$outputFile = "$Prefix-effective-ips.json"
+$outputFile = "$Prefix-effective-ips.xml"
 $outputFileLog = "$Prefix-effective-ips.log"
 
 function Write-Log {
