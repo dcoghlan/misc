@@ -17,9 +17,6 @@ param (
     [string]$IpSetPrefix = "MigratedVM",
     [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmName")]
     [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmId")]
-    [switch]$MultiNicVM = $false,
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmName")]
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmId")]
     [switch]$VmDuplicateName = $false,
     [parameter ( Mandatory = $true, ParameterSetName = "modeReplace")]
     [string[]]$file,
@@ -150,23 +147,6 @@ function Invoke-ConnectivityCheck {
     }
 }
 
-function Invoke-MultiVNicWaring {
-
-    if ( ($script:MultiNicVM) -AND ($script:confirm -eq $true) ) {
-        Write-Host -ForegroundColor cyan ("*" * 80)
-        Write-Host -ForegroundColor cyan '                                WARNING'
-        Write-Host -ForegroundColor cyan 'Processing a multi NIC VM with this script places ALL the VMs IP Addresses into'
-        Write-Host -ForegroundColor cyan 'ALL the effective securitygroups. If securitygroups use logicalswitches or vNics'
-        Write-Host -ForegroundColor cyan 'in the configuration, more IP addresses than required might be added to the'
-        Write-Host -ForegroundColor cyan 'effective security groups.'
-        Write-Host
-        Write-Host -ForegroundColor cyan 'To suppress this message, use -confirm:$false'
-        Write-Host -ForegroundColor cyan ("*" * 80)
-        Write-Host "Press any key to continue...`n"
-        [void]($Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown'))    
-    }
-}
-
 function Invoke-LookupVMs {
     <#
     .SYNOPSIS
@@ -230,13 +210,6 @@ function Invoke-LookupVMs {
         }
         else {
             foreach ($v in $vm) {
-                if ($script:MultiNicVM -eq $false) {
-                    $vmNetworkAdapters = $v | Get-NetworkAdapter
-                    if ($vmNetworkAdapters.count -gt 1) {
-                        Write-Host -ForegroundColor Red "[$(Get-LogDate)] ERROR: VM with multiple network adapters identified by $vmToLookup were found in vCenter - $($global:DefaultVIServer.name). To process VMs with multiple network adapters, use the -MultiNicVM switch."
-                        $continue = $false
-                    }
-                }
                 $vmObjects.Add($v) | Out-Null
             }
         }
@@ -776,7 +749,6 @@ switch ($script:mode) {
     "prepare" {
         Get-LogHeaderDetails
         Invoke-ConnectivityCheck -type both
-        Invoke-MultiVNicWaring
         Write-Log -Level Host -Msg "Retrieving virtual machines"
         $script:vms = Invoke-LookupVMs -Items $VirtualMachine
         Invoke-RetrieveAllObjects 
@@ -786,7 +758,6 @@ switch ($script:mode) {
     "replace" {
         Get-LogHeaderDetails
         Invoke-ConnectivityCheck -type NSXManager
-        Invoke-MultiVNicWaring
         Invoke-FileValidation -file $file
         Invoke-CheckJson -file $file
         Invoke-ReplaceVmWithIpSet -file $file
