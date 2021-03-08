@@ -7,32 +7,22 @@
 
 param (
     [parameter ( Mandatory = $true)]
-    [ValidateSet("prepare", "replace", "all")]
+    [ValidateSet("prepare", "replace")]
     [string]$Mode = "prepare",
-    [parameter ( Mandatory = $true, ParameterSetName = "modePrepareVmId")]
-    [string[]]$Id,
     [parameter ( Mandatory = $true, ParameterSetName = "modePrepareVmName")]
     [object[]]$VirtualMachine,
     [parameter ( Mandatory = $false, ParameterSetName = "modeReplace")]
     [string]$IpSetPrefix = "MigratedVM",
     [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmName")]
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmId")]
-    [switch]$MultiNicVM = $false,
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmName")]
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmId")]
     [switch]$VmDuplicateName = $false,
     [parameter ( Mandatory = $true, ParameterSetName = "modeReplace")]
     [string[]]$file,
     [parameter ( Mandatory = $false, ParameterSetName = "modeReplace")]
     [ValidateSet("v4", "v6", "both")]
-    [string]$IpAddressFamily = "both",
-    [parameter ( Mandatory = $false, ParameterSetName = "modeReplace")]
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmName")]
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmId")]
-    [switch]$Confirm = $true
+    [string]$IpAddressFamily = "both"
 )
 
-$script:version = "1.0.0"
+$script:version = "1.0.1"
 $script:StartTime = Get-Date
 $Prefix = $script:StartTime.ToString('yyy-MM-dd-HHmmss')
 $script:scriptName = [System.IO.Path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Name) 
@@ -150,23 +140,6 @@ function Invoke-ConnectivityCheck {
     }
 }
 
-function Invoke-MultiVNicWaring {
-
-    if ( ($script:MultiNicVM) -AND ($script:confirm -eq $true) ) {
-        Write-Host -ForegroundColor cyan ("*" * 80)
-        Write-Host -ForegroundColor cyan '                                WARNING'
-        Write-Host -ForegroundColor cyan 'Processing a multi NIC VM with this script places ALL the VMs IP Addresses into'
-        Write-Host -ForegroundColor cyan 'ALL the effective securitygroups. If securitygroups use logicalswitches or vNics'
-        Write-Host -ForegroundColor cyan 'in the configuration, more IP addresses than required might be added to the'
-        Write-Host -ForegroundColor cyan 'effective security groups.'
-        Write-Host
-        Write-Host -ForegroundColor cyan 'To suppress this message, use -confirm:$false'
-        Write-Host -ForegroundColor cyan ("*" * 80)
-        Write-Host "Press any key to continue...`n"
-        [void]($Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown'))    
-    }
-}
-
 function Invoke-LookupVMs {
     <#
     .SYNOPSIS
@@ -230,13 +203,6 @@ function Invoke-LookupVMs {
         }
         else {
             foreach ($v in $vm) {
-                if ($script:MultiNicVM -eq $false) {
-                    $vmNetworkAdapters = $v | Get-NetworkAdapter
-                    if ($vmNetworkAdapters.count -gt 1) {
-                        Write-Host -ForegroundColor Red "[$(Get-LogDate)] ERROR: VM with multiple network adapters identified by $vmToLookup were found in vCenter - $($global:DefaultVIServer.name). To process VMs with multiple network adapters, use the -MultiNicVM switch."
-                        $continue = $false
-                    }
-                }
                 $vmObjects.Add($v) | Out-Null
             }
         }
@@ -538,7 +504,13 @@ function Invoke-PrepareInformation {
         # Saving the effective security group membership for the VM
         $vmDataEffectiveGroups = New-Object System.Collections.ArrayList
         ForEach ($effectiveGroup in $vmEffectiveGroups) {
-            $vmDataEffectiveGroups.Add(@{"name" = $effectiveGroup.name; "objectId" = $effectiveGroup.objectId }) | Out-Null
+            # Grab the effective vNics related to the effective group, and keep
+            # the ones for this VM with the effective group information.
+            $vmDataEffectiveVnics = New-Object System.Collections.ArrayList
+            $effectiveVnics = $effectiveGroup | Get-NsxSecurityGroupEffectiveVnic
+            $effectiveVnics.uuid | Where-Object { $_ -match "^$($vm.PersistentId)" } | ForEach-Object { $vmDataEffectiveVnics.Add($_) | Out-Null }
+
+            $vmDataEffectiveGroups.Add(@{"name" = $effectiveGroup.name; "objectId" = $effectiveGroup.objectId; "virtualNic" = $vmDataEffectiveVnics }) | Out-Null
         }
         $vmData.Add('effectiveGroups', $vmDataEffectiveGroups)
     
@@ -626,6 +598,25 @@ function Invoke-ReplaceVmWithIpSet {
                 $jsonData['virtualMachine']['ipset'] = @{}
             }
 
+            # Check through the effective group information, specifically the 
+            # virtualNics, and compare it against the virtualNic information learnt
+            # about the VM. If the count of the effective virtualNics in each 
+            # effective groups matches the number of virtualNics discovered from
+            # the virtual machine, then it is assumed that only "VM Objects" are
+            # consumed. If the number differs in 1 or more groups, then a virtualNic
+            # is used somewhere, and its required that we create IPSets for all the
+            # individual virtualNics so they can be added individually as required
+            # to the effective groups.
+            $multiVnicIpSetsRequired = $false
+            $vmVnicCount = $jsonData['virtualNic'].count
+            Write-Log -Level Verbose -Msg "Virtual machine vNic count = $vmVnicCount"
+            foreach ($effectiveGroup in $jsonData['effectiveGroups']) {
+                if ($effectiveGroup['virtualNic'].count -ne $vmVnicCount) {
+                    $multiVnicIpSetsRequired = $true
+                    Write-Log -Level Verbose -Msg "Found group $($effectiveGroup.name) ($($effectiveGroup.objectId)) with effective vNic count ($($effectiveGroup['virtualNic'].count)) that differs from virtual machine vnic count ($vmVnicCount)"
+                }
+            }
+
             foreach ($addressFamily in $script:addressFamilies) {
                 Write-Log -Level Verbose -Msg "Processing $addressfamily address family."
 
@@ -641,7 +632,7 @@ function Invoke-ReplaceVmWithIpSet {
                 if ($knownAddresses) {
                     # Check if an IPSet already exists for the VM, and if one doesn't then create it.
                     if ($null -eq $vmIpSet) {
-                        Write-Log -Level Verbose -Msg "Creating new IPSet $($newIpSetName) ($($knownAddresses -join ","))"
+                        Write-Log -Level Host -Msg "Creating new IPSet $($newIpSetName) ($($knownAddresses -join ", "))"
                         # Create the IP set to represent the VM. This will be added to the effective 
                         # security groups that the migrated VM is/was a member of.
                         $vmIpSet = New-NsxIpSet -Name $newIpSetName -IPAddress $knownAddresses -EnableInheritance
@@ -656,21 +647,74 @@ function Invoke-ReplaceVmWithIpSet {
                         $jsonData['virtualMachine']['ipset'][$addressFamily].Add("objectId", $vmIpSet.objectId)
                         $jsonData['virtualMachine']['ipset'][$addressFamily].Add("value", $($knownAddresses -join ","))
                     }
-                    Write-Log -Level Verbose -Msg "Storing IPSet data for VM $($jsonData['virtualMachine']['name']) ($($jsonData['virtualMachine']['moref']))"
-                    $completeFileName = "$([System.IO.Path]::GetFileNameWithoutExtension($f).trimEnd('_prepare'))_complete.json"
-                    $jsonData | ConvertTo-Json -Depth 100 | Out-File -path $completeFileName
 
-                    # Add the IPSet into the appropriate effective securitygroups
+                    if ($multiVnicIpSetsRequired) {
+                        Write-Log -Level Verbose -Msg "Multiple vNIC IPSets are required to be created."
+
+                        foreach ($virtualNic in $jsonData['virtualNic'].keys) {
+
+                            if (! ($jsonData['virtualNic'][$virtualNic]['ipset'])) {
+                                $jsonData['virtualNic'][$virtualNic]['ipset'] = @{}
+                            }
+                            $jsonData['virtualNic'][$virtualNic]['ipset'].Add($addressFamily, @{})
+
+                            $newVnicIpSetName = "$($ipsetPrefix)_$($addressFamily)_$($jsonData['virtualMachine']['name'])_$($jsonData['virtualMachine']['moref'])_$virtualNic"
+
+                            # Using the generated name, check to see if it already exists, and if it does, save it as a variable
+                            Write-Log -Level Verbose -Msg "Checking for existing IPSet with name $newVnicIpSetName"
+                            $vnicIpSet = Invoke-CheckIpSetExists -ipsets $script:existingIpSets -name $newVnicIpSetName
+
+                            $vnicKnownAddresses = $jsonData['virtualNic'][$virtualNic]['ipAddress'][$addressFamily]
+                            if ($vnicKnownAddresses) {
+                                if ($null -eq $vnicIpSet) {
+                                    Write-Log -Level Host -Msg "Creating new vNic IPSet $($newVnicIpSetName) ($($vnicKnownAddresses -join ", "))"
+                                    # Create the IP set to represent the vnic. This will be added to the effective 
+                                    # security groups that the vnic is/was a member of.
+                                    $vnicIpSet = New-NsxIpSet -Name $newVnicIpSetName -IPAddress $vnicKnownAddresses -EnableInheritance
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("name", $vnicIpSet.name)
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("objectId", $vnicIpSet.objectId)
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("value", $($vnicKnownAddresses -join ","))
+                                }
+                                else {
+                                    Write-Log -Level Verbose -Msg "Existing vNic IPSet exists. Determining changes required for vNic IPSet $($vnicIpSet.name) ($($vnicIpSet.objectId))"
+                                    Invoke-VerifyIpSetAddresses -ipset $vnicIpSet -DiscoveredAddresses $vnicKnownAddresses
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("name", $vnicIpSet.name)
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("objectId", $vnicIpSet.objectId)
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("value", $($vnicKnownAddresses -join ","))
+                                }
+                            }
+                            
+                        }
+                    }
+                    
+                    # Add the required IPSet/s into the appropriate effective securitygroups
                     ForEach ($effectiveGroup in ($jsonData['effectiveGroups'] | Where-Object { $_.name -notmatch "^internal_security_group_for_" })) {
-                        Write-Log -Level Verbose -Msg "Retrieving latest configuration for effective security group $($effectiveGroup.name) ($($effectiveGroup.objectId))"
-                        $g = Get-NsxSecurityGroup -objectId $effectiveGroup.objectId
-                        
-                        if ($g.member.objectId -notcontains $vmIpSet.objectId) {
-                            Write-Log -Level Host -Msg "Adding VM IPSet $($vmIpSet.name) ($($vmIpSet.objectId)) to effective security group $($g.name) ($($g.objectId))"
-                            $g | Add-NsxSecurityGroupMember -Member $vmIpSet
+
+                        # Check to see if we need to process vNics individually, or we can just use the VM IPSet
+                        if ($effectiveGroup['virtualNic'].count -ne $vmVnicCount) {
+                            foreach ($effectiveVnicUuid in $effectiveGroup['virtualNic']) {
+                                Write-Log -Level Verbose -Msg "Retrieving latest configuration for effective security group $($effectiveGroup.name) ($($effectiveGroup.objectId))"
+                                $g = Get-NsxSecurityGroup -objectId $effectiveGroup.objectId
+                                $vNicIpset = $jsondata['virtualNic'][$effectiveVnicUuid]['ipset'][$addressFamily]
+                                if ($g.member.objectId -notcontains $vNicIpset.objectId) {
+                                    Write-Log -Level Host -Msg "Adding vNic IPSet $($vNicIpset['name']) ($($vNicIpset['objectId'])) to effective security group $($g.name) ($($g.objectId))"
+                                    $g | Add-NsxSecurityGroupMember -Member $vNicIpset['objectId']
+                                }
+                                else {
+                                    Write-Log -Level Verbose -Msg "Found vNic IPSet $($vNicIpset.name) ($($vNicIpset.objectId)) is already added to the effective security group $($g.name) ($($g.objectId))"
+                                }
+                            }
                         }
                         else {
-                            Write-Log -Level Host -Msg "Found VM IPSet $($vmIpSet.name) ($($vmIpSet.objectId)) is already added to the effective security group $($g.name) ($($g.objectId))"
+                            Write-Log -Level Verbose -Msg "Retrieving latest configuration for effective security group $($effectiveGroup.name) ($($effectiveGroup.objectId))"
+                            $g = Get-NsxSecurityGroup -objectId $effectiveGroup.objectId
+                            if ($g.member.objectId -notcontains $vmIpSet.objectId) {
+                                Write-Log -Level Host -Msg "Adding VM IPSet $($vmIpSet.name) ($($vmIpSet.objectId)) to effective security group $($g.name) ($($g.objectId))"
+                                $g | Add-NsxSecurityGroupMember -Member $vmIpSet
+                            }
+                            else {
+                                Write-Log -Level Verbose -Msg "Found VM IPSet $($vmIpSet.name) ($($vmIpSet.objectId)) is already added to the effective security group $($g.name) ($($g.objectId))"
+                            }
                         }
                     }
                 }
@@ -683,6 +727,10 @@ function Invoke-ReplaceVmWithIpSet {
                 }
                 Write-Log -Level Verbose -Msg "Finished processing $addressfamily address family."
             }
+            Write-Log -Level Verbose -Msg "Storing IPSet data for VM $($jsonData['virtualMachine']['name']) ($($jsonData['virtualMachine']['moref']))"
+            $completeFileName = "$([System.IO.Path]::GetFileNameWithoutExtension($f).trimEnd('_prepare'))_complete.json"
+            $jsonData | ConvertTo-Json -Depth 100 | Out-File -path $completeFileName
+                    
         }
     }
 }
@@ -695,7 +743,6 @@ switch ($script:mode) {
     "prepare" {
         Get-LogHeaderDetails
         Invoke-ConnectivityCheck -type both
-        Invoke-MultiVNicWaring
         Write-Log -Level Host -Msg "Retrieving virtual machines"
         $script:vms = Invoke-LookupVMs -Items $VirtualMachine
         Invoke-RetrieveAllObjects 
@@ -705,7 +752,6 @@ switch ($script:mode) {
     "replace" {
         Get-LogHeaderDetails
         Invoke-ConnectivityCheck -type NSXManager
-        Invoke-MultiVNicWaring
         Invoke-FileValidation -file $file
         Invoke-CheckJson -file $file
         Invoke-ReplaceVmWithIpSet -file $file
