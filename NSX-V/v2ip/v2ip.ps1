@@ -632,6 +632,25 @@ function Invoke-ReplaceVmWithIpSet {
                 $jsonData['virtualMachine']['ipset'] = @{}
             }
 
+            # Check through the effective group information, specifically the 
+            # virtualNics, and compare it against the virtualNic information learnt
+            # about the VM. If the count of the effective virtualNics in each 
+            # effective groups matches the number of virtualNics discovered from
+            # the virtual machine, then it is assumed that only "VM Objects" are
+            # consumed. If the number differs in 1 or more groups, then a virtualNic
+            # is used somewhere, and its required that we create IPSets for all the
+            # individual virtualNics so they can be added individually as required
+            # to the effective groups.
+            $multiVnicIpSetsRequired = $false
+            $vmVnicCount = $jsonData['virtualNic'].count
+            Write-Log -Level Verbose -Msg "Virtual machine vNic count = $vmVnicCount"
+            foreach ($effectiveGroup in $jsonData['effectiveGroups']) {
+                if ($effectiveGroup['virtualNic'].count -ne $vmVnicCount) {
+                    $multiVnicIpSetsRequired = $true
+                    Write-Log -Level Verbose -Msg "Found group $($effectiveGroup.name) ($($effectiveGroup.objectId)) with effective vNic count ($($effectiveGroup['virtualNic'].count)) that differs from virtual machine vnic count ($vmVnicCount)"
+                }
+            }
+
             foreach ($addressFamily in $script:addressFamilies) {
                 Write-Log -Level Verbose -Msg "Processing $addressfamily address family."
 
