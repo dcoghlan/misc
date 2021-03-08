@@ -681,6 +681,45 @@ function Invoke-ReplaceVmWithIpSet {
                         $jsonData['virtualMachine']['ipset'][$addressFamily].Add("objectId", $vmIpSet.objectId)
                         $jsonData['virtualMachine']['ipset'][$addressFamily].Add("value", $($knownAddresses -join ","))
                     }
+
+                    if ($multiVnicIpSetsRequired) {
+                        Write-Log -Level Verbose -Msg "Multiple vNIC IPSets are required to be created."
+
+                        foreach ($virtualNic in $jsonData['virtualNic'].keys) {
+
+                            if (! ($jsonData['virtualNic'][$virtualNic]['ipset'])) {
+                                $jsonData['virtualNic'][$virtualNic]['ipset'] = @{}
+                            }
+                            $jsonData['virtualNic'][$virtualNic]['ipset'].Add($addressFamily, @{})
+
+                            $newVnicIpSetName = "$($ipsetPrefix)_$($addressFamily)_$($jsonData['virtualMachine']['name'])_$($jsonData['virtualMachine']['moref'])_$virtualNic"
+
+                            # Using the generated name, check to see if it already exists, and if it does, save it as a variable
+                            Write-Log -Level Verbose -Msg "Checking for existing IPSet with name $newVnicIpSetName"
+                            $vnicIpSet = Invoke-CheckIpSetExists -ipsets $script:existingIpSets -name $newVnicIpSetName
+
+                            $vnicKnownAddresses = $jsonData['virtualNic'][$virtualNic]['ipAddress'][$addressFamily]
+                            if ($vnicKnownAddresses) {
+                                if ($null -eq $vnicIpSet) {
+                                    Write-Log -Level Verbose -Msg "Creating new vNic IPSet $($newVnicIpSetName) ($($vnicKnownAddresses -join ","))"
+                                    # Create the IP set to represent the vnic. This will be added to the effective 
+                                    # security groups that the vnic is/was a member of.
+                                    $vnicIpSet = New-NsxIpSet -Name $newVnicIpSetName -IPAddress $vnicKnownAddresses -EnableInheritance
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("name", $vnicIpSet.name)
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("objectId", $vnicIpSet.objectId)
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("value", $($vnicKnownAddresses -join ","))
+                                }
+                                else {
+                                    Write-Log -Level Verbose -Msg "Existing vNic IPSet exists. Determining changes required for vNic IPSet $($vnicIpSet.name) ($($vnicIpSet.objectId))"
+                                    Invoke-VerifyIpSetAddresses -ipset $vnicIpSet -DiscoveredAddresses $vnicKnownAddresses
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("name", $vnicIpSet.name)
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("objectId", $vnicIpSet.objectId)
+                                    $jsonData['virtualNic'][$virtualNic]['ipset'][$addressFamily].Add("value", $($vnicKnownAddresses -join ","))
+                                }
+                            }
+                            
+                        }
+                    }
                     Write-Log -Level Verbose -Msg "Storing IPSet data for VM $($jsonData['virtualMachine']['name']) ($($jsonData['virtualMachine']['moref']))"
                     $completeFileName = "$([System.IO.Path]::GetFileNameWithoutExtension($f).trimEnd('_prepare'))_complete.json"
                     $jsonData | ConvertTo-Json -Depth 100 | Out-File -path $completeFileName
