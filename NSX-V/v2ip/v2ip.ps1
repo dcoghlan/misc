@@ -7,7 +7,7 @@
 
 param (
     [parameter ( Mandatory = $true)]
-    [ValidateSet("prepare", "replace", "all")]
+    [ValidateSet("prepare", "replace")]
     [string]$Mode = "prepare",
     [parameter ( Mandatory = $true, ParameterSetName = "modePrepareVmName")]
     [object[]]$VirtualMachine,
