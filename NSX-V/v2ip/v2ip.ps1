@@ -9,14 +9,11 @@ param (
     [parameter ( Mandatory = $true)]
     [ValidateSet("prepare", "replace", "all")]
     [string]$Mode = "prepare",
-    [parameter ( Mandatory = $true, ParameterSetName = "modePrepareVmId")]
-    [string[]]$Id,
     [parameter ( Mandatory = $true, ParameterSetName = "modePrepareVmName")]
     [object[]]$VirtualMachine,
     [parameter ( Mandatory = $false, ParameterSetName = "modeReplace")]
     [string]$IpSetPrefix = "MigratedVM",
     [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmName")]
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmId")]
     [switch]$VmDuplicateName = $false,
     [parameter ( Mandatory = $true, ParameterSetName = "modeReplace")]
     [string[]]$file,
