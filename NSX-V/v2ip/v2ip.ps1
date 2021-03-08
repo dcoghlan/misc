@@ -686,9 +686,6 @@ function Invoke-ReplaceVmWithIpSet {
                             
                         }
                     }
-                    Write-Log -Level Verbose -Msg "Storing IPSet data for VM $($jsonData['virtualMachine']['name']) ($($jsonData['virtualMachine']['moref']))"
-                    $completeFileName = "$([System.IO.Path]::GetFileNameWithoutExtension($f).trimEnd('_prepare'))_complete.json"
-                    $jsonData | ConvertTo-Json -Depth 100 | Out-File -path $completeFileName
                     
                     # Add the required IPSet/s into the appropriate effective securitygroups
                     ForEach ($effectiveGroup in ($jsonData['effectiveGroups'] | Where-Object { $_.name -notmatch "^internal_security_group_for_" })) {
@@ -730,6 +727,10 @@ function Invoke-ReplaceVmWithIpSet {
                 }
                 Write-Log -Level Verbose -Msg "Finished processing $addressfamily address family."
             }
+            Write-Log -Level Verbose -Msg "Storing IPSet data for VM $($jsonData['virtualMachine']['name']) ($($jsonData['virtualMachine']['moref']))"
+            $completeFileName = "$([System.IO.Path]::GetFileNameWithoutExtension($f).trimEnd('_prepare'))_complete.json"
+            $jsonData | ConvertTo-Json -Depth 100 | Out-File -path $completeFileName
+                    
         }
     }
 }
