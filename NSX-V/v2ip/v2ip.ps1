@@ -22,11 +22,7 @@ param (
     [string[]]$file,
     [parameter ( Mandatory = $false, ParameterSetName = "modeReplace")]
     [ValidateSet("v4", "v6", "both")]
-    [string]$IpAddressFamily = "both",
-    [parameter ( Mandatory = $false, ParameterSetName = "modeReplace")]
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmName")]
-    [parameter ( Mandatory = $false, ParameterSetName = "modePrepareVmId")]
-    [switch]$Confirm = $true
+    [string]$IpAddressFamily = "both"
 )
 
 $script:version = "1.0.0"
