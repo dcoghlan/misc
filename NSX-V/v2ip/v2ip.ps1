@@ -22,7 +22,7 @@ param (
     [string]$IpAddressFamily = "both"
 )
 
-$script:version = "1.0.0"
+$script:version = "1.0.1"
 $script:StartTime = Get-Date
 $Prefix = $script:StartTime.ToString('yyy-MM-dd-HHmmss')
 $script:scriptName = [System.IO.Path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Name) 

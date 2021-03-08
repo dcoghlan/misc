@@ -1,13 +1,38 @@
 # v2ip
 
-A script that creates an IPSet for specified virtual machines, and places it into the effective NSX-v security group. It is designed to be used as part of a migration from NSX-v to NSX-T.
+A script that creates an IPSets for specified virtual machines, and places it into the effective NSX-v security group. It is designed to be used as part of a migration from NSX-v to NSX-T.
 
 ## Modes
 
 The script operates in 2 modes, `prepare` and `replace`. It is done this way to allow the information to be gathered and validated, before any changes implemented.
 
-- **_Prepare mode_**: In this mode the script requires an existing connection to vCenter and NSX Manager. The targeted virtual machines are supplied using the `-virtualmachine` parameter which accepts virtual machine objects, names or morefs (in the format of either `vm-xx` or `Virtual-Machine-vm-xx`). Required information is gathered from both vCenter and NSX Manager and is then saved in JSON format with the naming convention `<scriptName>_<vm name>_<vm id>_prepare.json`
-- **_Replace mode_**: In this mode the script requires an existing connection to NSX Manager only. The `-file` parameter is used to specify the name/path to the JSON files created via the `prepare` mode. Each file is then processed, and an IPSet is created for each VM and added to all the effective security groups.
+### Mode: Prepare
+
+In this mode the script requires an existing connection to vCenter and NSX Manager. The targeted virtual machines are supplied using the `-virtualmachine` parameter which accepts virtual machine objects, names or morefs (in the format of either `vm-xx` or `Virtual-Machine-vm-xx`). Required information is gathered from both vCenter and NSX Manager and is then saved in JSON format with the naming convention `<scriptName>_<vm name>_<vm id>_prepare.json`
+
+The following parameters are available to run in this mode:
+
+- `-mode Prepare`
+  - Required parameter that tells the script to run in prepare mode
+- `-VirtualMachine`
+  - Required parameter used to supply one or more virtual machine names or Ids
+- `-VmDuplicateName`
+  - Option switch that instruct the script to continue processing the virtual machines, even if there are 2 virtual machines that match the same name as supplied. By default, the script will throw an error and terminate if it finds more than 1 match for a given virtual machine name.
+
+### Mode: Replace
+
+In this mode the script requires an existing connection to NSX Manager only. The `-file` parameter is used to specify the name/path to the JSON files created via the `prepare` mode. Each file is then processed, and an IPSet is created for each VM and added to all the effective security groups. At the completion, the IPSet information for the virtual machine and any vnics added to the original JSON data and saved into a new file with the naming convention `<scriptName>_<vm name>_<vm id>_complete.json`
+
+The following parameters are available to run in this mode:
+
+- `-mode Replace`
+  - Required parameter that tells the script to run in replace mode
+- `-file`
+  - Required parameter used to supply 1 or more files to be processed. The files to be processed are the ones created from the `prepare` mode.
+- `-IpSetPrefix`
+  - Optional parameter to set the IPSet name prefix. If not specified, `MigratedVM` is used.
+- `-IpAddressFamily`
+  - Optional parameter to define the IP Address Family to use to create the IPSets. Options available are `v4`, `v6`, `both`. If not specified, `both` is used.
 
 ## Example: Prepare Mode
 
@@ -165,5 +190,4 @@ PS C:\temp> .\v2ip.ps1 -mode replace -file .\v2ip_SingleNicVM1_vm-48_prepare.jso
 
 ## Known Issues
 
-- Multi vNic machines: Although the script is able to identify each individual vNIC of a virtual machine, along with its associated IP addresses, it currently treats the VM object as a single entity. This means that ALL the IP addresses of a VM will end up in ALL the effective securitygroups, even though they may not have originally done so (either because the VM was a member via a logical switch, or the vNic was statically defined). This is being addressed in a future update.
 - The script is currently only handling VM membership within security groups. If a VM is directly referenced in the source/destination of a DFW rule, the script will not have any affect. The scenario to determine if the VM is used directly in a DFW rule, and subsequently replace it with an IPSet will be addressed in a future update.
