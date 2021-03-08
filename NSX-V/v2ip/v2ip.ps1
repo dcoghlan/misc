@@ -538,7 +538,13 @@ function Invoke-PrepareInformation {
         # Saving the effective security group membership for the VM
         $vmDataEffectiveGroups = New-Object System.Collections.ArrayList
         ForEach ($effectiveGroup in $vmEffectiveGroups) {
-            $vmDataEffectiveGroups.Add(@{"name" = $effectiveGroup.name; "objectId" = $effectiveGroup.objectId }) | Out-Null
+            # Grab the effective vNics related to the effective group, and keep
+            # the ones for this VM with the effective group information.
+            $vmDataEffectiveVnics = New-Object System.Collections.ArrayList
+            $effectiveVnics = $effectiveGroup | Get-NsxSecurityGroupEffectiveVnic
+            $effectiveVnics.uuid | Where-Object { $_ -match "^$($vm.PersistentId)" } | ForEach-Object { $vmDataEffectiveVnics.Add($_) | Out-Null }
+
+            $vmDataEffectiveGroups.Add(@{"name" = $effectiveGroup.name; "objectId" = $effectiveGroup.objectId; "virtualNic" = $vmDataEffectiveVnics }) | Out-Null
         }
         $vmData.Add('effectiveGroups', $vmDataEffectiveGroups)
     
