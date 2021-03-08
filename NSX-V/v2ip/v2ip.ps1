@@ -666,7 +666,7 @@ function Invoke-ReplaceVmWithIpSet {
                 if ($knownAddresses) {
                     # Check if an IPSet already exists for the VM, and if one doesn't then create it.
                     if ($null -eq $vmIpSet) {
-                        Write-Log -Level Verbose -Msg "Creating new IPSet $($newIpSetName) ($($knownAddresses -join ","))"
+                        Write-Log -Level Host -Msg "Creating new IPSet $($newIpSetName) ($($knownAddresses -join ", "))"
                         # Create the IP set to represent the VM. This will be added to the effective 
                         # security groups that the migrated VM is/was a member of.
                         $vmIpSet = New-NsxIpSet -Name $newIpSetName -IPAddress $knownAddresses -EnableInheritance
@@ -701,7 +701,7 @@ function Invoke-ReplaceVmWithIpSet {
                             $vnicKnownAddresses = $jsonData['virtualNic'][$virtualNic]['ipAddress'][$addressFamily]
                             if ($vnicKnownAddresses) {
                                 if ($null -eq $vnicIpSet) {
-                                    Write-Log -Level Verbose -Msg "Creating new vNic IPSet $($newVnicIpSetName) ($($vnicKnownAddresses -join ","))"
+                                    Write-Log -Level Host -Msg "Creating new vNic IPSet $($newVnicIpSetName) ($($vnicKnownAddresses -join ", "))"
                                     # Create the IP set to represent the vnic. This will be added to the effective 
                                     # security groups that the vnic is/was a member of.
                                     $vnicIpSet = New-NsxIpSet -Name $newVnicIpSetName -IPAddress $vnicKnownAddresses -EnableInheritance
