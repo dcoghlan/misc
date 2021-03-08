@@ -723,18 +723,35 @@ function Invoke-ReplaceVmWithIpSet {
                     Write-Log -Level Verbose -Msg "Storing IPSet data for VM $($jsonData['virtualMachine']['name']) ($($jsonData['virtualMachine']['moref']))"
                     $completeFileName = "$([System.IO.Path]::GetFileNameWithoutExtension($f).trimEnd('_prepare'))_complete.json"
                     $jsonData | ConvertTo-Json -Depth 100 | Out-File -path $completeFileName
-
-                    # Add the IPSet into the appropriate effective securitygroups
+                    
+                    # Add the required IPSet/s into the appropriate effective securitygroups
                     ForEach ($effectiveGroup in ($jsonData['effectiveGroups'] | Where-Object { $_.name -notmatch "^internal_security_group_for_" })) {
-                        Write-Log -Level Verbose -Msg "Retrieving latest configuration for effective security group $($effectiveGroup.name) ($($effectiveGroup.objectId))"
-                        $g = Get-NsxSecurityGroup -objectId $effectiveGroup.objectId
-                        
-                        if ($g.member.objectId -notcontains $vmIpSet.objectId) {
-                            Write-Log -Level Host -Msg "Adding VM IPSet $($vmIpSet.name) ($($vmIpSet.objectId)) to effective security group $($g.name) ($($g.objectId))"
-                            $g | Add-NsxSecurityGroupMember -Member $vmIpSet
+
+                        # Check to see if we need to process vNics individually, or we can just use the VM IPSet
+                        if ($effectiveGroup['virtualNic'].count -ne $vmVnicCount) {
+                            foreach ($effectiveVnicUuid in $effectiveGroup['virtualNic']) {
+                                Write-Log -Level Verbose -Msg "Retrieving latest configuration for effective security group $($effectiveGroup.name) ($($effectiveGroup.objectId))"
+                                $g = Get-NsxSecurityGroup -objectId $effectiveGroup.objectId
+                                $vNicIpset = $jsondata['virtualNic'][$effectiveVnicUuid]['ipset'][$addressFamily]
+                                if ($g.member.objectId -notcontains $vNicIpset.objectId) {
+                                    Write-Log -Level Host -Msg "Adding vNic IPSet $($vNicIpset['name']) ($($vNicIpset['objectId'])) to effective security group $($g.name) ($($g.objectId))"
+                                    $g | Add-NsxSecurityGroupMember -Member $vNicIpset['objectId']
+                                }
+                                else {
+                                    Write-Log -Level Verbose -Msg "Found vNic IPSet $($vNicIpset.name) ($($vNicIpset.objectId)) is already added to the effective security group $($g.name) ($($g.objectId))"
+                                }
+                            }
                         }
                         else {
-                            Write-Log -Level Host -Msg "Found VM IPSet $($vmIpSet.name) ($($vmIpSet.objectId)) is already added to the effective security group $($g.name) ($($g.objectId))"
+                            Write-Log -Level Verbose -Msg "Retrieving latest configuration for effective security group $($effectiveGroup.name) ($($effectiveGroup.objectId))"
+                            $g = Get-NsxSecurityGroup -objectId $effectiveGroup.objectId
+                            if ($g.member.objectId -notcontains $vmIpSet.objectId) {
+                                Write-Log -Level Host -Msg "Adding VM IPSet $($vmIpSet.name) ($($vmIpSet.objectId)) to effective security group $($g.name) ($($g.objectId))"
+                                $g | Add-NsxSecurityGroupMember -Member $vmIpSet
+                            }
+                            else {
+                                Write-Log -Level Verbose -Msg "Found VM IPSet $($vmIpSet.name) ($($vmIpSet.objectId)) is already added to the effective security group $($g.name) ($($g.objectId))"
+                            }
                         }
                     }
                 }
