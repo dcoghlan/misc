@@ -1,0 +1,4 @@
+# One network per line: <network>/<prefix> <gateway>
+# (or: <network> <prefix> <gateway>)
+192.0.2.0/24 192.0.2.1
+198.51.100.0 24 198.51.100.1
